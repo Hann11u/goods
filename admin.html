@@ -97,11 +97,11 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
     <div style="font-size:12px;color:var(--text2);text-align:center;margin-bottom:20px">請輸入管理密碼</div>
     <div style="margin-bottom:10px">
       <label>密碼</label>
-      <input id="pw-input" type="password" placeholder="••••••" onkeydown="if(event.key==='Enter')checkPw()">
+      <input id="pw-input" type="text" placeholder="輸入密碼" onkeydown="if(event.key==='Enter')checkPw()">
     </div>
     <button class="btn primary" style="width:100%" onclick="checkPw()">登入</button>
     <div id="pw-err" style="color:var(--red);font-size:12px;margin-top:8px;display:none;text-align:center">密碼錯誤，請再試一次。</div>
-    <div style="font-size:11px;color:var(--text3);text-align:center;margin-top:16px">預設密碼：<code>admin1234</code><br>可在帳號設定中修改</div>
+    
   </div>
 </div>
 
@@ -316,9 +316,14 @@ const DSTEPS = ['喊單截止','付訂金','已於官網下單','官方已出貨
 
 // ── API helpers ──
 async function apiFetch(type) {
-  const r = await fetch(API + '?type=' + type);
-  const j = await r.json();
-  return j.ok ? j.data : null;
+  try {
+    const r = await fetch(API + '?type=' + type);
+    const j = await r.json();
+    return j.ok ? j.data : null;
+  } catch(e) {
+    console.warn('apiFetch error:', type, e);
+    return null;
+  }
 }
 async function apiPost(type, data) {
   showSaving(true);
@@ -332,7 +337,17 @@ let _O=null,_P=null,_C=null,_S=null,_R=null,_CAT=null;
 async function getO(){if(!_O)_O=await apiFetch('orders')||[];return _O}
 async function getP(){if(!_P)_P=await apiFetch('products')||[];return _P}
 async function getC(){if(!_C)_C=await apiFetch('campaigns')||[];return _C}
-async function getS(){if(!_S)_S=await apiFetch('settings')||{depositPct:50,depositNote:'訂金五成，餘款到貨後付清',bank:'',num:'',note:'',img:'',pw:'admin1234'};return _S}
+async function getS(){
+  if(!_S){
+    try{
+      const data=await apiFetch('settings');
+      _S=data||{depositPct:50,depositNote:'訂金五成，餘款到貨後付清',bank:'',num:'',note:'',img:'',pw:'admin1234'};
+    }catch(e){
+      _S={depositPct:50,depositNote:'訂金五成，餘款到貨後付清',bank:'',num:'',note:'',img:'',pw:'admin1234'};
+    }
+  }
+  return _S;
+}
 async function getR(){if(!_R)_R=await apiFetch('rates')||{JPY:0.22,KRW:0.024,CNY:4.4,USD:32};return _R}
 async function getCAT(){if(!_CAT)_CAT=await apiFetch('cats')||['周邊','文具','服飾','書籍','限定商品','其他'];return _CAT}
 async function saveO(v){_O=v;await apiPost('orders',v)}
@@ -347,13 +362,15 @@ function oTotal(o,P){return Object.entries(o.items).reduce((s,[k,v])=>{const p=P
 function cm(id){document.getElementById(id).classList.remove('open')}
 
 // ── login ──
-async function checkPw(){
-  const S = await getS();
+function checkPw(){
   const pw = document.getElementById('pw-input').value;
-  if(pw === (S.pw||'admin1234')){
+  // 從 localStorage 取得密碼，沒有就用預設值
+  const saved = localStorage.getItem('dg_admin_pw');
+  const correctPw = saved || 'hennyyyy';
+  if(pw === correctPw){
     document.getElementById('login-screen').style.display='none';
     document.getElementById('admin-main').style.display='';
-    await refreshAll();
+    refreshAll();
   } else {
     document.getElementById('pw-err').style.display='';
     document.getElementById('pw-input').value='';
@@ -775,7 +792,7 @@ async function saveSettings(){
   const S=await getS();
   const newPw=document.getElementById('new-pw').value;
   const newPw2=document.getElementById('new-pw2').value;
-  if(newPw){if(newPw!==newPw2)return alert('兩次密碼不一致');if(newPw.length<4)return alert('密碼至少4位');S.pw=newPw}
+  if(newPw){if(newPw!==newPw2)return alert('兩次密碼不一致');if(newPw.length<4)return alert('密碼至少4位');S.pw=newPw;localStorage.setItem('dg_admin_pw',newPw)}
   S.bank=document.getElementById('acct-bank').value.trim();
   S.num=document.getElementById('acct-num').value.trim();
   S.note=document.getElementById('acct-note').value.trim();
